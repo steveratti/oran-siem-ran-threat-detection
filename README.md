@@ -66,7 +66,7 @@ python3 convert_runs.py --glob "full_a10j50_r*" --out scenarioAJ_splunk.csv
 python3 convert_runs.py --glob "full_iotc_r*" "full_iotv_r*" --out scenarioD_splunk.csv --base 2026-10-21
 ```
 
-One event = one UE and one 50 ms report. Columns: `time` (event time), `run`, `cond`, `seed`, `t_ms` (simulation time),
+One event = one UE and one 50 ms report (DU/CU-UP period); the CU-CP reports the L3 SINR every 100 ms, so sinr_db is filled in every second event. Columns: `time` (event time), `run`, `cond`, `seed`, `t_ms` (simulation time),
 `ue_id` (IMSI), `pdcp_thr_kbps`, `pdcp_vol`, `pdcp_delay_ms`, `rlc_buffer`, `sinr_db` (serving-cell L3 SINR),
 `attacker` (ground truth: flooded UE / targeted IoT device), `profile` (benign traffic profile, Scenario A).
 
