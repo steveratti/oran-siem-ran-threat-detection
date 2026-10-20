@@ -1,0 +1,21 @@
+| comment "Scenario D: thresholds per device class on the tuning control runs (k = 3); iot_assets.csv uploaded as a lookup table file"
+index="scenario_d" cond="iotc" seed<=5
+| eval w=floor(t_ms/1000)
+| stats avg(pdcp_thr_kbps) as thr by run ue_id w
+| lookup iot_assets.csv ue_id OUTPUT dev_class
+| sort 0 run ue_id w
+| streamstats window=3 min(thr) as m3 count as n by run ue_id
+| where n>=3 | stats max(m3) as theta by dev_class
+
+| comment "Class-aware detection on the test runs (global rule: replace the eval theta line by | eval theta=4812.16)"
+index="scenario_d" seed>=6
+| eval w=floor(t_ms/1000)
+| stats avg(pdcp_thr_kbps) as thr max(attacker) as attacker by run cond ue_id w
+| lookup iot_assets.csv ue_id OUTPUT dev_class
+| eval theta=if(dev_class="iot", 0, 4812.16)
+| sort 0 run ue_id w
+| streamstats window=3 min(thr) as m3 count as n by run ue_id
+| where n>=3 AND m3>theta
+| stats min(w) as w_alarm max(attacker) as attacker by run cond ue_id dev_class
+| eval outcome=case(attacker=1 AND w_alarm>=10, "victim detected", attacker=0, "false alarm", true(), "early")
+| stats count by dev_class outcome

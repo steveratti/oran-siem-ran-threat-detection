@@ -1,0 +1,18 @@
+| comment "Indexing delay of the streamed events (index time has 1 s resolution: lo/hi bound the delay)"
+index="hec_latency" run="full_a10j50_*"
+| eval lo=_indextime-sent, hi=_indextime+1-sent
+| stats count median(lo) as med_lo median(hi) as med_hi perc95(hi) as p95_hi max(hi) as max_hi by run
+
+| comment "Triage (k = 3) on the streamed events, and time at which the alarm window was fully indexed"
+index="hec_latency" run="full_a10j50_*"
+| eval w=floor(t_ms/1000), low=if(sinr_db<-12,1,0), t0=sent-t_ms/1000
+| stats avg(pdcp_thr_kbps) as thr sum(low) as ue_low max(_indextime) as it min(t0) as t0 by run ue_id w
+| eventstats sum(ue_low) as low max(it) as it_w min(t0) as t0r by run w
+| sort 0 run ue_id w
+| streamstats window=3 min(thr) as mthr min(low) as mlow count as n by run ue_id
+| eval fl=if(n>=3 AND w>=12 AND mthr>4812.16, w, null()), jm=if(n>=3 AND mlow>=11, w, null())
+| eval ready=it_w+1-(t0r+w+1)
+| eval rf=if(isnotnull(fl), ready, null()), rj=if(isnotnull(jm), ready, null())
+| where isnotnull(fl) OR isnotnull(jm)
+| sort 0 run w
+| stats first(fl) as w_flood first(rf) as ready_flood_s first(jm) as w_jam first(rj) as ready_jam_s by run

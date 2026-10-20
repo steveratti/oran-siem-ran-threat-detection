@@ -1,0 +1,19 @@
+| comment "Scenario A: threshold on the attack-free tuning runs (k = 3), then per-UE detection on the test runs"
+index="scenario_a" cond="ctrl" seed<=5
+| bin _time span=1s
+| stats avg(pdcp_thr_kbps) as thr by run ue_id _time
+| sort 0 run ue_id _time
+| streamstats window=3 min(thr) as m3 count as n by run ue_id
+| where n>=3 | stats max(m3) as theta
+
+index="scenario_a" seed>=6
+| bin _time span=1s
+| stats avg(pdcp_thr_kbps) as thr by run ue_id _time
+| sort 0 run ue_id _time
+| streamstats window=3 min(thr) as m3 count as n by run ue_id
+| where n>=3 AND m3>4812.16
+| stats min(_time) as t_alarm by run ue_id
+
+| comment "MLTK variant"
+... | fit DensityFunction thr upper_threshold=0.001 into dfA_thr      (tuning control runs)
+... | apply dfA_thr                                                  (test runs)

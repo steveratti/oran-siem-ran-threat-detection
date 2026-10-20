@@ -1,0 +1,6 @@
+| comment "Scenario B (index jammer_full): serving-cell reports with L3 SINR < -12 dB per 1 s window, alarm at >= N_al = 11 (k = 1). Check the metric_type value of serving-cell reports with: index=jammer_full | stats count by metric_type"
+index="jammer_full" metric_type="serving"
+| where sinr_db < -12
+| bin _time span=1s
+| stats count by run _time
+| where count>=11

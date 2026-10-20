@@ -1,0 +1,19 @@
+| comment "Jamming threshold on the 20 jammer-free tuning runs (k = 10 -> max_low = 4, N_al = 5; k = 3 -> 10, N_al = 11)"
+index="scenario_a" cond!="j50" cond!="a10j50" seed<=5
+| eval w=floor(t_ms/1000), low=if(sinr_db<-12,1,0)
+| stats sum(low) as low by run w
+| sort 0 run w
+| streamstats window=10 min(low) as m count as n by run
+| where n>=10 | stats max(m) as max_low
+
+| comment "Joint triage at k = 10 s (for k = 3 s: window=3, n>=3, w>=12, mlow>=11)"
+index="scenario_a" seed>=6
+| eval w=floor(t_ms/1000), low=if(sinr_db<-12,1,0)
+| stats avg(pdcp_thr_kbps) as thr sum(low) as ue_low by run cond ue_id w
+| eventstats sum(ue_low) as low by run w
+| sort 0 run ue_id w
+| streamstats window=10 min(thr) as mthr min(low) as mlow count as n by run ue_id
+| eval fl=if(n>=10 AND w>=19 AND mthr>4812.16, w+1, null()), jm=if(n>=10 AND mlow>=5, w+1, null())
+| stats min(fl) as t_flood min(jm) as t_jam by run cond
+| eval decision=case(isnotnull(t_flood) AND isnotnull(t_jam),"jamming+flood", isnotnull(t_jam),"jamming", isnotnull(t_flood),"flood", true(),"normal")
+| chart count over cond by decision
