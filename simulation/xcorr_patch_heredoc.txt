@@ -1,0 +1,105 @@
+python3 - <<'EOF'
+d = "/home/k3/ns-O-RAN-flexric/mmwave-LENA-oran/scratch/"
+
+FLOW = r'''// ---------------- IT-domain flow log at the PGW (SGi boundary), 1 s bins ----------------
+// One record per second and per (src, dst, protocol, ports) of the UE user plane, as a
+// NetFlow/IPFIX exporter or firewall at the core-network boundary would report it.
+static std::map<std::tuple<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t>,
+                std::pair<uint64_t, uint64_t>> g_flows;
+
+static void
+FlowLogForward (const Ipv4Header &h, Ptr<const Packet> p, uint32_t /* iface */)
+{
+  uint32_t src = h.GetSource ().Get ();
+  uint32_t dst = h.GetDestination ().Get ();
+  if ((src >> 24) != 7 && (dst >> 24) != 7)
+    {
+      return; // only the user plane of the UEs (7.0.0.0/8)
+    }
+  uint32_t sport = 0, dport = 0;
+  if (h.GetProtocol () == 17 && p->GetSize () >= 8)
+    {
+      UdpHeader u;
+      p->PeekHeader (u);
+      sport = u.GetSourcePort ();
+      dport = u.GetDestinationPort ();
+    }
+  uint32_t sec = (uint32_t) Simulator::Now ().GetSeconds ();
+  auto &e = g_flows[std::make_tuple (sec, src, dst, (uint32_t) h.GetProtocol (), sport, dport)];
+  e.first += p->GetSize () + h.GetSerializedSize ();
+  e.second += 1;
+}
+
+static void
+WriteFlows (std::string fn)
+{
+  std::ofstream f (fn.c_str (), std::ios_base::out | std::ios_base::trunc);
+  f << "t_s,src_ip,dst_ip,proto,src_port,dst_port,bytes,packets" << std::endl;
+  for (auto &kv : g_flows)
+    {
+      f << std::get<0> (kv.first) << "," << Ipv4Address (std::get<1> (kv.first)) << ","
+        << Ipv4Address (std::get<2> (kv.first)) << "," << std::get<3> (kv.first) << ","
+        << std::get<4> (kv.first) << "," << std::get<5> (kv.first) << "," << kv.second.first << ","
+        << kv.second.second << std::endl;
+    }
+}
+
+'''
+
+ROUTE = '  remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);\n'
+EXT = r'''  // external host outside the operator domain (2.0.0.2): source of the downlink floods and
+  // target of the IoT botnet; the benign content server stays at remoteHost (1.0.0.2)
+  NodeContainer extHostContainer;
+  extHostContainer.Create (1);
+  Ptr<Node> extHost = extHostContainer.Get (0);
+  internet.Install (extHostContainer);
+  NetDeviceContainer extDevices = p2ph.Install (pgw, extHost);
+  ipv4h.SetBase ("2.0.0.0", "255.0.0.0");
+  Ipv4InterfaceContainer extIfaces = ipv4h.Assign (extDevices);
+  Ipv4Address extHostAddr = extIfaces.GetAddress (1);
+  ipv4RoutingHelper.GetStaticRouting (extHost->GetObject<Ipv4> ())
+      ->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+  PacketSinkHelper extSink ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 60000));
+  extSink.Install (extHost).Start (Seconds (0));
+  pgw->GetObject<Ipv4L3Protocol> ()->TraceConnectWithoutContext ("UnicastForward",
+                                                                 MakeCallback (&FlowLogForward));
+'''
+
+UEIP = '  Ipv4InterfaceContainer ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (mcUeDevs));\n'
+IPMAP = r'''  {
+    // IMSI <-> UE IP binding, as recorded by the core network (PDU session / CDR log)
+    std::ofstream ipf ("ue_ip.txt", std::ios_base::out | std::ios_base::trunc);
+    ipf << "imsi,ue_ip" << std::endl;
+    for (uint32_t u = 0; u < mcUeDevs.GetN (); ++u)
+      {
+        ipf << mcUeDevs.Get (u)->GetObject<McUeNetDevice> ()->GetImsi () << ","
+            << ueIpIface.GetAddress (u) << std::endl;
+      }
+  }
+'''
+
+def patch(src, dst, swaps):
+    s = open(d + src).read()
+    if "FlowLogForward" in s:
+        raise SystemExit(src + " already patched")
+    def rep(a, b):
+        nonlocal s
+        assert s.count(a) == 1, (src, a[:70], s.count(a))
+        s = s.replace(a, b)
+    rep('#include <cmath>\n', '#include <cmath>\n#include <map>\n#include <tuple>\n')
+    rep('int\nmain (int argc, char *argv[])', FLOW + 'int\nmain (int argc, char *argv[])')
+    rep(ROUTE, ROUTE + EXT)
+    rep(UEIP, UEIP + IPMAP)
+    rep('  Simulator::Run ();\n', '  Simulator::Run ();\n  WriteFlows ("it_flows.txt");\n')
+    for a, b in swaps:
+        rep(a, b)
+    open(d + dst, "w").write(s)
+    print("wrote", dst)
+
+common = [('f = dl.Install (remoteHost);', 'f = dl.Install (extHost);'),
+          ('UdpClientHelper ul (remoteHostAddr, 60000);', 'UdpClientHelper ul (extHostAddr, 60000);')]
+patch("scenario_anomaly_ue.cc", "scenario_xcorr_ue.cc", common)
+patch("scenario_iot_botnet.cc", "scenario_xcorr_iot.cc", common + [
+    ('ApplicationContainer v = vf.Install (remoteHost);', 'ApplicationContainer v = vf.Install (extHost);'),
+    ('UdpClientHelper fl (remoteHostAddr, 60000);', 'UdpClientHelper fl (extHostAddr, 60000);')])
+EOF

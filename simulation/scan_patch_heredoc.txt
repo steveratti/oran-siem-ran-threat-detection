@@ -1,0 +1,66 @@
+python3 - <<'EOF'
+d = "/home/k3/ns-O-RAN-flexric/mmwave-LENA-oran/scratch/"
+s = open(d + "scenario_xcorr_ue.cc").read()
+assert "FlowLogForward" in s, "run xcorr_patch first"
+def rep(a, b):
+    global s
+    assert s.count(a) == 1, ("not found", a[:70], s.count(a))
+    s = s.replace(a, b)
+
+# 1. scan sender (before main)
+rep('int\nmain (int argc, char *argv[])', r'''// ---------------- port scan from a compromised UE (uplink, low rate) ----------------
+// One small UDP probe every scanGap seconds to consecutive destination ports of the
+// external host; closed ports answer with ICMP port unreachable, as in a real UDP scan.
+static void
+ScanSend (Ptr<Socket> sock, Ipv4Address dst, uint32_t port, uint32_t last, double gap, uint32_t bytes)
+{
+  sock->SendTo (Create<Packet> (bytes), 0, InetSocketAddress (dst, (uint16_t) port));
+  if (port < last)
+    {
+      Simulator::Schedule (Seconds (gap), &ScanSend, sock, dst, port + 1, last, gap, bytes);
+    }
+}
+
+int
+main (int argc, char *argv[])''')
+
+# 2. options
+rep('  cmd.AddValue ("attackStart", "Flood start time [s]", attackStart);\n',
+    '  cmd.AddValue ("attackStart", "Flood start time [s]", attackStart);\n'
+    '  bool scanOn = false;            // UDP port scan from one compromised mobile UE\n'
+    '  double scanStart = 10.0;        // s\n'
+    '  double scanGap = 0.01;          // s between two probes (100 probes/s)\n'
+    '  uint32_t scanBytes = 40;        // UDP payload per probe\n'
+    '  cmd.AddValue ("scanOn", "Start the UDP port scan from one compromised UE", scanOn);\n'
+    '  cmd.AddValue ("scanStart", "Port scan start time [s]", scanStart);\n'
+    '  cmd.AddValue ("scanGap", "Time between two scan probes [s]", scanGap);\n'
+    '  cmd.AddValue ("scanBytes", "Scan probe payload [B]", scanBytes);\n')
+
+# 3. scanner: a mobile UE that is not a flood target, chosen from the run number
+#    (no random draw, so all other draws stay identical to the other conditions)
+rep('  sinkApp.Start (Seconds (0));\n', r'''  {
+    uint32_t scanner = RngSeedManager::GetRun () % nUeNodes;
+    while (isAttacker[scanner])
+      {
+        scanner = (scanner + 1) % nUeNodes;
+      }
+    Ptr<Socket> ss = Socket::CreateSocket (ueNodes.Get (scanner), UdpSocketFactory::GetTypeId ());
+    ss->Bind ();
+    uint32_t last = (uint32_t) std::min (65000.0, 1.0 + (simTime - scanStart - 0.2) / scanGap);
+    if (scanOn)
+      {
+        Simulator::Schedule (Seconds (scanStart), &ScanSend, ss, extHostAddr, 1u, last, scanGap,
+                             scanBytes);
+      }
+    std::ofstream sf ("scan.txt", std::ios_base::out | std::ios_base::trunc);
+    sf << "imsi,ue_ip,scan_on,scan_start_s,probes_per_s,probe_bytes,dst_ip,rng_run" << std::endl;
+    sf << mcUeDevs.Get (scanner)->GetObject<McUeNetDevice> ()->GetImsi () << ","
+       << ueIpIface.GetAddress (scanner) << "," << (scanOn ? 1 : 0) << "," << scanStart << ","
+       << 1.0 / scanGap << "," << scanBytes << "," << extHostAddr << "," << RngSeedManager::GetRun ()
+       << std::endl;
+  }
+  sinkApp.Start (Seconds (0));
+''')
+open(d + "scenario_xcorr_scan.cc", "w").write(s)
+print("wrote scenario_xcorr_scan.cc")
+EOF

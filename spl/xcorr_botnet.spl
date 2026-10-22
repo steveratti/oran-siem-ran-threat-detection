@@ -1,0 +1,16 @@
+| comment "Scenario E, IoT uplink botnet (k = 10 s): IT uplink-volume rule per UE, class-aware threshold fitted on the tuning control runs, then IMSI, device class and serving cell from the RAN events"
+index=xcorr_ran source="xcorr_it.csv" direction=ul
+| stats sum(bytes) as b by run, cond, seed, src_ip, t_s
+| eval kbps=b*8/1000
+| lookup xcorr_ueip.csv run, ue_ip AS src_ip OUTPUT imsi
+| lookup xcorr_assets.csv ue_id AS imsi OUTPUT dev_class
+| sort 0 run src_ip t_s
+| streamstats window=10 global=f min(kbps) as mk count as n by run, src_ip
+| where n=10 AND t_s>=10
+| eventstats max(eval(if(seed<=5 AND (cond="ctrl" OR cond="iotc"), mk, null()))) as th by dev_class
+| where seed>=6 AND mk>th
+| stats min(t_s) as w_alarm by run, imsi, dev_class
+| lookup xcorr_truth.csv run, imsi OUTPUT role
+| eval role=coalesce(role,"none")
+| map maxsearches=200 search="search index=xcorr_ran source=\"xcorr_ran.csv\" run=\"$run$\" ue_id=$imsi$ | eval w=floor(t_ms/1000) | where w>$w_alarm$-10 AND w<=$w_alarm$ | stats mode(cell) as cell | eval run=\"$run$\", imsi=$imsi$, dev_class=\"$dev_class$\", role=\"$role$\""
+| stats count by role, dev_class, cell

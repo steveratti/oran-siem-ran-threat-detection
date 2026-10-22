@@ -1,0 +1,61 @@
+| comment "L1: indexing delay of every streamed event (index time has 1 s resolution: hi = upper bound)"
+index=xcorr_ran source="live_*"
+| eval hi=_indextime+1-sent, send_late=sent-sched
+| stats count median(hi) as med_hi perc95(hi) as p95_hi max(hi) as max_hi max(send_late) as max_send_late by source
+
+| comment "L2: when was each 1 s window of each live run completely indexed (upper bound, s after the window end)"
+index=xcorr_ran source="live_*"
+| eval w=if(source="live_ran", floor(t_ms/1000), round(t_s))
+| stats max(_indextime) as idx max(t0) as t0 dc(source) as nsrc by run w
+| eval ready_hi=idx+1-(t0+w+1)
+| stats count as windows median(ready_hi) as med perc95(ready_hi) as p95 max(ready_hi) as max
+
+| comment "L3: IoT botnet on the live stream vs the uploaded file (k = 10 s, threshold fitted on the file's tuning runs)"
+index=xcorr_ran direction=ul ((source="xcorr_it.csv" seed<=8) OR source="live_it")
+| eval r=coalesce(orig_run, run)
+| stats sum(bytes) as b by source, r, cond, seed, src_ip, t_s
+| eval kbps=b*8/1000
+| lookup xcorr_ueip.csv run AS r, ue_ip AS src_ip OUTPUT imsi
+| lookup xcorr_assets.csv ue_id AS imsi OUTPUT dev_class
+| sort 0 source r src_ip t_s
+| streamstats window=10 global=f min(kbps) as mk count as n by source, r, src_ip
+| where n=10 AND t_s>=10
+| eventstats max(eval(if(source="xcorr_it.csv" AND seed<=5 AND (cond="ctrl" OR cond="iotc"), mk, null()))) as th by dev_class
+| where seed>=6 AND mk>th
+| stats min(t_s) as w_alarm by source, r, imsi, dev_class
+| lookup xcorr_truth.csv run AS r, imsi OUTPUT role
+| eval role=coalesce(role,"none")
+| stats count median(w_alarm) as median_w_alarm by source, role, dev_class
+
+| comment "L4: port scan on the live stream vs the file (k = 10 s, Zeek threshold 15)"
+index=xcorr_ran direction=ul proto=17 ((source="xcorr_it.csv" seed>=6 seed<=8) OR source="live_it")
+| eval r=coalesce(orig_run, run)
+| stats dc(dst_port) as ports by source, r, src_ip, dst_ip, t_s
+| sort 0 source r src_ip dst_ip t_s
+| streamstats window=10 global=f min(ports) as mp count as n by source, r, src_ip, dst_ip
+| where n=10 AND t_s>=10 AND mp>=15
+| stats min(t_s) as w_alarm by source, r, src_ip
+| lookup xcorr_ueip.csv run AS r, ue_ip AS src_ip OUTPUT imsi
+| lookup xcorr_truth.csv run AS r, imsi OUTPUT role
+| eval role=coalesce(role,"none")
+| stats count median(w_alarm) as median_w_alarm by source, role
+
+| comment "L5: flood attribution + allow-list on the live stream vs the file (k = 3 s)"
+index=xcorr_ran ((source="xcorr_ran.csv" seed<=8) OR source="live_ran")
+| eval r=coalesce(orig_run, run), w=floor(t_ms/1000)
+| eval ue_id=round(ue_id)
+| stats avg(pdcp_thr_kbps) as thr by source, r, cond, seed, ue_id, w
+| sort 0 source r ue_id w
+| streamstats window=3 global=f min(thr) as mk count as n by source, r, ue_id
+| where n=3 AND w>=10
+| lookup xcorr_assets.csv ue_id OUTPUT dev_class
+| eventstats max(eval(if(source="xcorr_ran.csv" AND seed<=5 AND (cond="ctrl" OR cond="iotc"), mk, null()))) as th by dev_class
+| where seed>=6 AND mk>th
+| stats min(w) as w_alarm by source, r, ue_id
+| lookup xcorr_ueip.csv run AS r, imsi AS ue_id OUTPUT ue_ip
+| lookup xcorr_truth.csv run AS r, imsi AS ue_id OUTPUT role
+| eval role=coalesce(role,"none"), itsrc=if(source="live_ran","live_it","xcorr_it.csv"), key=if(source="live_ran","orig_run","run")
+| map maxsearches=300 search="search index=xcorr_ran source=\"$itsrc$\" $key$=\"$r$\" dst_ip=\"$ue_ip$\" | where t_s>$w_alarm$-3 AND t_s<=$w_alarm$ | stats sum(bytes) as b by src_ip | sort - b | head 1 | eval src=\"$source$\", role=\"$role$\", w_alarm=$w_alarm$"
+| lookup known_services.csv ip AS src_ip OUTPUT trusted
+| eval verdict=if(trusted=1, "suppressed: allow-listed ".src_ip, "flood from ".src_ip)
+| stats count median(w_alarm) as median_w_alarm by src, role, verdict

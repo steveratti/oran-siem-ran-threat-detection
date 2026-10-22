@@ -18,6 +18,8 @@ This repository contains everything needed to reproduce the simulated scenarios 
 | C | Network-layer attacks on an over-the-air LTE testbed | public dataset, see below | `external_iot_ddos_validation` | not redistributed |
 | D | Ten static IoT devices: 0.5 Mb/s downlink flood towards two of them; uplink botnet pilot | 15 + 15 paired controls (seeds 1-5 / 6-15), 30 s | `scenario_d` | `data/scenarioD_splunk.csv.gz`, `data/iot_assets.csv` |
 | HEC | Three triage runs replayed through the HEC at the 50 ms reporting rate | seeds 6-8 | `hec_latency` | `analysis/hec_replay.py` |
+| E | RAN-IT correlation: RAN events + core-network flow records (PGW/SGi), IMSI-IP binding, asset list, allow-list. Conditions: no attack, 10 Mb/s flood, 50 dBm jammer, both, UDP port scan (60 s); IoT control, IoT botnet + IoT flood (30 s). Flood source / botnet target: external host 2.0.0.2 | 7 conditions x 15 seeds (1-5 / 6-15) | `xcorr_ran` (both event types, `source=xcorr_ran.csv` / `xcorr_it.csv`) | `data/xcorr_ran.csv.gz`, `data/xcorr_it.csv.gz`, `data/xcorr_*.csv`, `data/known_services.csv` |
+| E live | 21 test runs of Scenario E (seeds 6-8) streamed concurrently in real time: RAN reports at their 50 ms instants, flow records at the end of their 1 s bin | seeds 6-8 | `xcorr_ran` (`source=live_ran` / `live_it`) | `analysis/xcorr_live_replay.py` |
 
 Evaluation protocol: thresholds are fitted only on attack-free (or jammer-free) runs of seeds 1-5;
 all reported results use the held-out seeds. Attack and control runs with the same seed share every random draw.
@@ -37,7 +39,7 @@ Requires ns-O-RAN (`mmwave-LENA-oran`, ns-3.42) built in the optimized profile. 
 into `scratch/` and build:
 
 ```
-./ns3 build scenario_anomaly_ue scenario_iot_botnet
+./ns3 build scenario_anomaly_ue scenario_iot_botnet scenario_xcorr_ue scenario_xcorr_iot scenario_xcorr_scan
 ```
 
 Each run writes the E2 KPM logs (`--enableE2FileLogging=1`) and its ground truth (`anomaly.txt`, `jammer.txt`, `iot.txt`)
@@ -51,7 +53,16 @@ scenario_anomaly_ue --RngRun=7 --anomalyOn=0 --jammerOn=1 --jammerPowerDbm=50 --
 scenario_anomaly_ue --RngRun=7 --anomalyOn=1 --attackRateMbps=10 --attackStart=10 --jammerOn=1 --jammerPowerDbm=50 --simTime=60 --enableE2FileLogging=1 --enableTraces=0
 # Scenario D: flood towards two IoT devices (control: --victimOn=0); botnet pilot: --botOn=1
 scenario_iot_botnet --RngRun=7 --anomalyOn=0 --victimOn=1 --victimStart=10 --simTime=30 --enableE2FileLogging=1 --enableTraces=0
+# Scenario E (also writes it_flows.txt and ue_ip.txt): flood, jammer, port scan, IoT botnet + IoT flood
+scenario_xcorr_ue   --RngRun=7 --anomalyOn=1 --jammerOn=1 --jammerPowerDbm=50 --attackRateMbps=10 --attackStart=10 --simTime=60 --enableE2FileLogging=1 --enableTraces=0
+scenario_xcorr_scan --RngRun=7 --anomalyOn=0 --jammerOn=0 --scanOn=1 --scanStart=10 --simTime=60 --enableE2FileLogging=1 --enableTraces=0
+scenario_xcorr_iot  --RngRun=7 --anomalyOn=0 --botOn=1 --victimOn=1 --botStart=10 --victimStart=10 --simTime=30 --enableE2FileLogging=1 --enableTraces=0
 ```
+
+`simulation/run_xcorr.sh` and `simulation/run_scan.sh` run the 105 runs of Scenario E (folders `x_<condition>_r<seed>`).
+The Scenario E files add to the Scenario A/D deployments an external host (2.0.0.2) on its own link to the PGW, a flow log
+at the PGW (`it_flows.txt`: per second and per source, destination, protocol and ports, bytes and packets) and the
+IMSI-IP binding (`ue_ip.txt`); the port scan sends a 40 B UDP probe every 10 ms to consecutive ports of 2.0.0.2.
 
 Run folders are named `full_<condition>_r<seed>` (conditions `ctrl`, `a5`, `a10`, `a20`, `j50`, `a10j50`, `iotc`, `iotv`).
 The raw run folders (E2 KPM logs) are archived separately (see *Raw data*).
@@ -66,13 +77,18 @@ python3 convert_runs.py --glob "full_a10j50_r*" --out scenarioAJ_splunk.csv
 python3 convert_runs.py --glob "full_iotc_r*" "full_iotv_r*" --out scenarioD_splunk.csv --base 2026-10-21
 ```
 
-One event = one UE and one 50 ms report (DU/CU-UP period); the CU-CP reports the L3 SINR every 100 ms, so sinr_db is filled in every second event. Columns: `time` (event time), `run`, `cond`, `seed`, `t_ms` (simulation time),
+One event = one UE and one 50 ms report (DU/CU-UP period); the CU-CP reports the L3 SINR every 100 ms, so `sinr_db` is filled in every second event. Columns: `time` (event time), `run`, `cond`, `seed`, `t_ms` (simulation time),
 `ue_id` (IMSI), `pdcp_thr_kbps`, `pdcp_vol`, `pdcp_delay_ms`, `rlc_buffer`, `sinr_db` (serving-cell L3 SINR),
 `attacker` (ground truth: flooded UE / targeted IoT device), `profile` (benign traffic profile, Scenario A).
 
 In Splunk: *Add Data → Upload*, source type `csv`, timestamp field `time`, format `%Y-%m-%dT%H:%M:%S.%3NZ`, time zone GMT;
 `scenarioA`, `scenarioJ` and `scenarioAJ` into index `scenario_a`, `scenarioD` into `scenario_d`.
 Upload `iot_assets.csv` as a lookup table file (*Settings → Lookups → Lookup table files*).
+
+Scenario E: `cd <folder with the x_* runs> && python3 <repo>/analysis/xcorr_convert.py` writes `xcorr_ran.csv`,
+`xcorr_it.csv` and the lookups `xcorr_ueip.csv`, `xcorr_assets.csv`, `known_services.csv` (and the ground truth
+`xcorr_truth.csv`, used only for scoring). The paper posted both event files to the index `xcorr_ran` through the HEC
+(`sourcetype=_json`, `source` = file name); the four lookups go into `etc/apps/search/lookups`.
 
 ## 3. Detection
 
@@ -87,6 +103,8 @@ The searches are in `spl/`. Every SPL result of the paper has an offline counter
 | Scenario D (IoT) | `spl/scenario_d_iot.spl` | `analysis/iot_detection.py` |
 | Scenario C repetitions | — | `analysis/scenario_c_repeat.py <export.csv> --seeds 10` |
 | HEC streaming latency | `spl/hec_latency.spl` | `analysis/hec_replay.py` (sender) |
+| Scenario E: RAN only / IT only / correlated, triage | `spl/xcorr_botnet.spl`, `spl/xcorr_scan.spl`, `spl/xcorr_flood_attribution.spl` | `analysis/xcorr_eval.py` |
+| Scenario E on a real-time stream (21 concurrent runs) | `spl/xcorr_live.spl` | `analysis/xcorr_live_replay.py` (sender) |
 
 ## External data
 

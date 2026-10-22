@@ -1,0 +1,13 @@
+| comment "Scenario E, port scan (k = 10 s): at least 15 distinct destination ports of one destination per 1 s window (Zeek default), then IMSI, device class and serving cell"
+index=xcorr_ran source="xcorr_it.csv" direction=ul proto=17
+| stats dc(dst_port) as ports by run, seed, src_ip, dst_ip, t_s
+| sort 0 run src_ip dst_ip t_s
+| streamstats window=10 global=f min(ports) as mp count as n by run, src_ip, dst_ip
+| where n=10 AND t_s>=10 AND seed>=6 AND mp>=15
+| stats min(t_s) as w_alarm by run, src_ip
+| lookup xcorr_ueip.csv run, ue_ip AS src_ip OUTPUT imsi
+| lookup xcorr_assets.csv ue_id AS imsi OUTPUT dev_class
+| lookup xcorr_truth.csv run, imsi OUTPUT role
+| eval role=coalesce(role,"none")
+| map maxsearches=50 search="search index=xcorr_ran source=\"xcorr_ran.csv\" run=\"$run$\" ue_id=$imsi$ | eval w=floor(t_ms/1000) | where w>$w_alarm$-10 AND w<=$w_alarm$ | stats mode(cell) as cell | eval run=\"$run$\", imsi=$imsi$, dev_class=\"$dev_class$\", role=\"$role$\""
+| stats count by role, dev_class, cell

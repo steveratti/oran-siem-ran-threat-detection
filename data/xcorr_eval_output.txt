@@ -1,0 +1,35 @@
+runs per condition (all / test): {'a10': 15, 'a10j50': 15, 'ctrl': 15, 'iotbv': 15, 'iotc': 15, 'j50': 15, 'scan': 15} / {'a10': 10, 'a10j50': 10, 'ctrl': 10, 'iotbv': 10, 'iotc': 10, 'j50': 10, 'scan': 10}
+
+================ persistence k = 3 s ================
+thresholds (fitted on control runs, seeds 1-5): RAN PDCP {'mobile': 4812.2, 'iot': 0.0} | IT DL per source {'mobile': 5057.8, 'iot': 0.0} | IT UL {'mobile': 0.0, 'iot': 1.8} | IT distinct ports P = 15 (largest in control runs: 1) | RAN low-SINR count N = {'ue': 22, 'iot': 22}
+
+per attacked entity (test seeds 6-15): detected by RAN | detected by IT | correlated: source / IMSI / cell
+  flood target  n= 60 {'iot': 20, 'mobile': 40}  RAN 60/60 [94.0, 100.0]% | IT 60/60 [94.0, 100.0]% | source 2.0.0.2 named for 58/60 RAN alarms (median byte share 0.97), median time 3.0 s
+  bot           n= 50  RAN 0/50 [0.0, 7.1]% | IT UL volume 50/50 [92.9, 100.0]% | IMSI resolved 50/50, class {'iot': 50}, cell known 50/50, median time 3.0 s, cells {3: 18, 2: 13, 5: 10, 4: 9}
+  scanner       n= 10  RAN 0/10 [0.0, 30.8]% | IT port rule 10/10 [69.2, 100.0]% | IMSI resolved 10/10, class {'mobile': 10}, cell known 10/10, median time 3.0 s, cells {4: 5, 2: 2, 5: 2, 3: 1}
+  jammer        n= 20  RAN 9/20 [23.1, 68.5]% | IT (external source on a non-target UE) 0/20 -> classified radio-layer in 9/20
+
+false alarms (test): RAN flood 19 UE-runs of 900 (after allow-list correlation: 0; sources {'1.0.0.2': 19}) | IT DL 19 (after allow-list: 0) | IT UL 0 | IT ports 0 | RAN jamming 0/50 [0.0, 7.1]% of jammer-free runs
+
+run-level triage (exact label set correct), test runs:
+  ran_only    31/70  per condition: {'a10': 10, 'a10j50': 4, 'ctrl': 7, 'iotbv': 0, 'iotc': 7, 'j50': 3, 'scan': 0}
+  it_only     50/70  per condition: {'a10': 10, 'a10j50': 0, 'ctrl': 10, 'iotbv': 10, 'iotc': 10, 'j50': 0, 'scan': 10}
+  correlated  59/70  per condition: {'a10': 10, 'a10j50': 4, 'ctrl': 10, 'iotbv': 10, 'iotc': 10, 'j50': 5, 'scan': 10}
+
+================ persistence k = 10 s ================
+thresholds (fitted on control runs, seeds 1-5): RAN PDCP {'mobile': 4812.2, 'iot': 0.0} | IT DL per source {'mobile': 5049.5, 'iot': 0.0} | IT UL {'mobile': 0.0, 'iot': 1.8} | IT distinct ports P = 15 (largest in control runs: 1) | RAN low-SINR count N = {'ue': 6, 'iot': 12}
+
+per attacked entity (test seeds 6-15): detected by RAN | detected by IT | correlated: source / IMSI / cell
+  flood target  n= 60 {'iot': 20, 'mobile': 40}  RAN 60/60 [94.0, 100.0]% | IT 60/60 [94.0, 100.0]% | source 2.0.0.2 named for 60/60 RAN alarms (median byte share 0.97), median time 10.0 s
+  bot           n= 50  RAN 0/50 [0.0, 7.1]% | IT UL volume 50/50 [92.9, 100.0]% | IMSI resolved 50/50, class {'iot': 50}, cell known 50/50, median time 10.0 s, cells {3: 18, 2: 13, 5: 10, 4: 9}
+  scanner       n= 10  RAN 0/10 [0.0, 30.8]% | IT port rule 10/10 [69.2, 100.0]% | IMSI resolved 10/10, class {'mobile': 10}, cell known 10/10, median time 10.0 s, cells {4: 5, 2: 2, 5: 2, 3: 1}
+  jammer        n= 20  RAN 16/20 [56.3, 94.3]% | IT (external source on a non-target UE) 0/20 -> classified radio-layer in 16/20
+
+false alarms (test): RAN flood 0 UE-runs of 900 (after allow-list correlation: 0; sources {}) | IT DL 0 (after allow-list: 0) | IT UL 0 | IT ports 0 | RAN jamming 0/50 [0.0, 7.1]% of jammer-free runs
+
+run-level triage (exact label set correct), test runs:
+  ran_only    46/70  per condition: {'a10': 10, 'a10j50': 7, 'ctrl': 10, 'iotbv': 0, 'iotc': 10, 'j50': 9, 'scan': 0}
+  it_only     50/70  per condition: {'a10': 10, 'a10j50': 0, 'ctrl': 10, 'iotbv': 10, 'iotc': 10, 'j50': 0, 'scan': 10}
+  correlated  66/70  per condition: {'a10': 10, 'a10j50': 7, 'ctrl': 10, 'iotbv': 10, 'iotc': 10, 'j50': 9, 'scan': 10}
+
+delivered (RAN PDCP) / offered (IT flow) for flooded UEs, median per condition: {'a10': 0.953, 'a10j50': 0.953, 'iotbv': 0.956}

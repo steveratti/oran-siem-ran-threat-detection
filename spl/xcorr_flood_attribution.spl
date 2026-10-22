@@ -1,0 +1,18 @@
+| comment "Scenario E, flood attribution and allow-list (k = 3 s): class-aware RAN flood rule, largest source in the flow records of the alarm windows, allow-list (Listing in the paper)"
+index=xcorr_ran source="xcorr_ran.csv"
+| eval w=floor(t_ms/1000)
+| stats avg(pdcp_thr_kbps) as thr by run, cond, seed, ue_id, w
+| sort 0 run ue_id w
+| streamstats window=3 global=f min(thr) as mk count as n by run, ue_id
+| where n=3 AND w>=10
+| lookup xcorr_assets.csv ue_id OUTPUT dev_class
+| eventstats max(eval(if(seed<=5 AND (cond="ctrl" OR cond="iotc"), mk, null()))) as th by dev_class
+| where seed>=6 AND mk>th
+| stats min(w) as w_alarm by run, ue_id
+| lookup xcorr_ueip.csv run, imsi AS ue_id OUTPUT ue_ip
+| lookup xcorr_truth.csv run, imsi AS ue_id OUTPUT role
+| eval role=coalesce(role,"none")
+| map maxsearches=200 search="search index=xcorr_ran source=\"xcorr_it.csv\" run=\"$run$\" dst_ip=\"$ue_ip$\" | where t_s>$w_alarm$-3 AND t_s<=$w_alarm$ | stats sum(bytes) as b by src_ip | eventstats sum(b) as tot | sort - b | head 1 | eval share=round(b/tot,2), run=\"$run$\", ue_id=$ue_id$, role=\"$role$\""
+| lookup known_services.csv ip AS src_ip OUTPUT trusted
+| eval verdict=if(trusted=1, "suppressed: allow-listed ".src_ip, "flood from ".src_ip)
+| stats count, median(share) as median_share by role, verdict
