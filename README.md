@@ -2,7 +2,7 @@
 
 Code, Splunk SPL searches and processed data for the paper
 
-> S. A. Ratti et al., **"Cognitive RAN Defense: An Integrated O-RAN-SIEM Architecture for RAN Threat Detection in 5G"**, submitted.
+S. A. Ratti et al., "SIEM-Based Monitoring of O-RAN: An Agent/Forwarder xApp Architecture for RAN Threat Detection", under review.
 
 An Agent/Forwarder xApp on the Near-RT RIC selects E2 KPM fields, normalizes them into JSON events and
 forwards them to Splunk through the HTTP Event Collector (HEC). All detection runs in Splunk (SPL and MLTK).
