@@ -1,4 +1,4 @@
-# O-RAN-to-SIEM: RAN threat detection with forwarded E2 telemetry
+# SIEM-Based Monitoring of O-RAN: An Agent/Forwarder xApp Architecture for RAN Threat Detection
 
 Code, Splunk SPL searches and processed data for the paper
 
@@ -121,4 +121,4 @@ Code: MIT (see `LICENSE`). Data in `data/`: CC BY 4.0.
 
 ## Citation
 
-If you use this code or data, please cite the paper above.
+If you use this code or data, please cite the paper above (under review; the full reference will be added when it is published).
