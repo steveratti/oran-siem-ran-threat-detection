@@ -108,7 +108,7 @@ The searches are in `spl/`. Every SPL result of the paper has an offline counter
 
 ## External data
 
-* Scenario B: O-RAN Jammer Detection and Geolocation Dataset, https://github.com/steveratti/oran-jammer-detection-geolocation-dataset (Release v2.0).
+* Scenario B: O-RAN Jammer Detection and Geolocation Dataset, https://github.com/steveratti/oran-jammer-detection-geolocation-dataset (Release v2.0). The jammer detection and geolocation framework and this dataset are published in: S. A. Ratti, A. Piccioni, F. Graziosi, D. Cassioli and A. Marotta, "An O-RAN-Native xApp Framework for Jammer Detection and Geolocation", Sensors, vol. 26, no. 21, 6859, 2026, doi:10.3390/s26216859 (https://doi.org/10.3390/s26216859).
 * Scenario C: B. M. Xavier et al., "Performance Measurement Dataset for Open RAN with User Mobility and Security Threats", Computer Networks 253 (2024) 110710; data: Mendeley Data, doi:10.17632/t2rzh9y4mp.1.
 
 ## Raw data
