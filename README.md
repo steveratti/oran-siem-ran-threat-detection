@@ -113,7 +113,24 @@ The searches are in `spl/`. Every SPL result of the paper has an offline counter
 
 ## Raw data
 
-The raw run folders (E2 KPM logs of all runs, several GB) are archived on Zenodo: *DOI to be added*.
+The raw run folders (E2 KPM logs of all runs) are archived on Zenodo:
+[10.5281/zenodo.24322072](https://doi.org/10.5281/zenodo.24322072) (4.2 GB, 15 archives).
+That DOI always resolves to the latest version; version 1.0 is
+[10.5281/zenodo.24322073](https://doi.org/10.5281/zenodo.24322073).
+
+One archive per condition, 30 seeds for Scenario A and the triage runs, 15 for Scenario D
+and Scenario E:
+
+| Archive | Condition |
+|---|---|
+| `full_ctrl_seeds1-30.tar.gz` | Scenario A, attack-free control |
+| `full_a5_seeds1-30.tar.gz`, `full_a10_seeds1-30.tar.gz`, `full_a20_seeds1-30.tar.gz` | Scenario A, flood at 5, 10 and 20 Mb/s |
+| `full_j50_seeds1-30.tar.gz`, `full_a10j50_seeds1-30.tar.gz` | Triage: jammer alone, jammer + 10 Mb/s flood |
+| `full_iotc_seeds1-15.tar.gz`, `full_iotv_seeds1-15.tar.gz` | Scenario D, control and IoT flood |
+| `x_ctrl_seeds1-15.tar.gz`, `x_a10_...`, `x_j50_...`, `x_a10j50_...`, `x_scan_...`, `x_iotc_...`, `x_iotbv_...` | Scenario E, the seven conditions |
+
+`SHA256SUMS.txt` is in the record; verify with `sha256sum -c SHA256SUMS.txt` before extracting.
+Scenario B is not in this record: its runs are in the jammer dataset listed under External data.
 
 ## License
 
@@ -122,3 +139,18 @@ Code: MIT (see `LICENSE`). Data in `data/`: CC BY 4.0.
 ## Citation
 
 If you use this code or data, please cite the paper above (under review; the full reference will be added when it is published).
+
+For the raw simulation data, please cite the Zenodo record:
+
+```bibtex
+@dataset{ratti2026siemdata,
+  author    = {Ratti, Steve Azarsh and Piccioni, Alex and Tiberti, Walter and
+               Centofanti, Carlo and Graziosi, Fabio and Marotta, Andrea},
+  title     = {{SIEM}-Based Monitoring of {O-RAN}: Raw Simulation Data for an
+               Agent/Forwarder {xApp} Architecture},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {1.0},
+  doi       = {10.5281/zenodo.24322073}
+}
+```
